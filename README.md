@@ -24,6 +24,16 @@ shasum -a 256 -c Hostess-0.2.0-arm64-unnotarized.zip.sha256
 
 The result should end in `OK`.
 
+## Screenshots
+
+Edit and organize hosts profiles. These screenshots use example profiles and hostnames.
+
+![Hostess profile editor with Default, Staging, and Local example profiles and local development hosts entries.](docs/screenshots/profile-editor.jpg)
+
+Give each profile a name and an optional menu-bar emoji.
+
+![Hostess New Profile dialog with an emoji and Work.hst entered as the profile name.](docs/screenshots/new-profile.jpg)
+
 ## Build from source
 
 Source builds target macOS 13 or later and require Swift 6 (Xcode 16 or later). Use a Mac supported by your toolchain. The build targets your Mac's architecture.
