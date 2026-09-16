@@ -75,7 +75,7 @@ Scripts/install_app.sh --system
 
 The app bundle id is `app.hostess.Hostess`.
 
-Ad hoc builds use administrator approval when applying a different profile. Passwordless switching requires a Developer ID signed build or a personal build signed with an Apple Development certificate. Both require one-time setup and approval in System Settings.
+Ad hoc builds use administrator approval when applying a different profile. Personal builds signed with an Apple Development certificate can enable passwordless switching after one-time setup and approval in System Settings.
 
 To install a personal build with your existing Apple Development signing identity:
 
@@ -95,7 +95,7 @@ sudo Scripts/uninstall_helper.sh
 
 ## Package a download
 
-Create an unnotarized ZIP without an Apple Developer Program membership:
+Create the public unnotarized ZIP:
 
 ```bash
 Scripts/package_app.sh
@@ -103,7 +103,7 @@ Scripts/package_app.sh
 
 The script builds with an ad hoc signature and creates the ZIP and its SHA-256 checksum in `.build/releases`. On Apple Silicon, the archive is `Hostess-0.2.0-arm64-unnotarized.zip`. Publish both files together and retain the installation instructions above.
 
-The published [Homebrew cask](Casks/hostess.rb) pins the current release URL and SHA-256. For a release that passes Gatekeeper's normal checks, use Developer ID signing and notarization through `Scripts/release_app.sh`. See [Packaging/Homebrew](Packaging/Homebrew/README.md) for release and cask maintenance instructions.
+The published [Homebrew cask](Casks/hostess.rb) pins the current release URL and SHA-256. See [Packaging/Homebrew](Packaging/Homebrew/README.md) for cask maintenance instructions.
 
 ## Behavior
 
@@ -118,7 +118,7 @@ The published [Homebrew cask](Casks/hostess.rb) pins the current release URL and
 - Applies the selected profile by replacing `/etc/hosts` with that profile's content.
 - Accepts profiles up to 512 KiB when applying changes; rejects empty content and null bytes.
 - Uses administrator approval to write the selected contents through protected staging, then flushes DNS cache.
-- Apple Development and Developer ID signed builds can enable passwordless switching through macOS Service Management. The app and helper verify each other's signing identity, and the helper permits only the administrator-enrolled user account.
+- Personal Apple Development signed builds can enable passwordless switching through macOS Service Management. The app and helper verify each other's signing identity, and the helper permits only the administrator-enrolled user account.
 - Can disable passwordless switching from the menu. Disable it before replacing a signed app manually.
 
 ## Security and sharing

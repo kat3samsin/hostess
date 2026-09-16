@@ -34,8 +34,8 @@ For non-Homebrew removal, the service can also be unregistered by running the in
 
 macOS normally blocks this download on first launch. Users can approve it through **System Settings → Privacy & Security → Open Anyway**, where permitted. See [Apple's installation guidance](https://support.apple.com/en-us/102445) and the [download instructions](README.md#download).
 
-`Scripts/build_app.sh` produces a local ad hoc build by default and stops on signing errors. For distribution that passes Gatekeeper's normal checks, `Scripts/release_app.sh` requires a Developer ID identity and an existing notarization keychain profile. It creates a release archive only after notarization is accepted, the ticket is stapled and validated, and Gatekeeper accepts the app.
+`Scripts/build_app.sh` produces a local ad hoc build by default and stops on signing errors. Public releases use `Scripts/package_app.sh` and the project's Homebrew tap.
 
-Passwordless switching has been verified on the maintainer's Mac with an Apple Development signed personal build. Installation and privileged writes from the downloaded ZIP on another Mac remain unverified. The automated tests verify rejected impostor signatures and safe command behavior using scratch files. They do not perform administrator writes or notarization.
+Passwordless switching has been verified on the maintainer's Mac with an Apple Development signed personal build. Installation and privileged writes from the downloaded ZIP on another Mac remain unverified. The automated tests verify rejected impostor signatures and safe command behavior using scratch files. They do not perform administrator writes.
 
 Keep real hosts profiles, private screenshots, credentials, and signing keys out of public issues and repository files. This project has no telemetry, network client, or external Swift package dependencies.
