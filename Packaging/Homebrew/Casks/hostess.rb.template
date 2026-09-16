@@ -1,0 +1,50 @@
+cask "hostess" do
+	version "0.2.0"
+	sha256 "<replace-with-release-zip-sha256>"
+
+	url "https://github.com/OWNER/REPO/releases/download/v#{version}/Hostess-#{version}.zip"
+	name "Hostess"
+	desc "Menu bar app for switching hosts-file profiles"
+	homepage "https://github.com/OWNER/REPO"
+
+	app "Hostess.app"
+
+	# Unregister through Service Management as the current user, before removing the app.
+	uninstall_preflight do
+		system_command "#{appdir}/Hostess.app/Contents/MacOS/Hostess",
+		               args: ["--unregister-helper"],
+		               sudo: false,
+		               must_succeed: true
+	end
+
+	# Only system executables and fixed paths run with administrator privileges.
+	uninstall quit: "app.hostess.Hostess",
+	          script: {
+		          executable: "/bin/sh",
+		          args: ["-c", <<~SH],
+			          set -eu
+			          /bin/launchctl disable system/app.hostess.Hostess.Helper
+			          if state=$(/bin/launchctl print system/app.hostess.Hostess.Helper 2>&1); then
+			            /bin/launchctl bootout system/app.hostess.Hostess.Helper
+			          else
+			            status=$?
+			            if [ "$status" -ne 113 ]; then
+			              printf '%s\\n' "$state" >&2
+			              exit "$status"
+			            fi
+			          fi
+			          /bin/rm -f \
+			            /Library/LaunchDaemons/app.hostess.Hostess.Helper.plist \
+			            /Library/PrivilegedHelperTools/app.hostess.Hostess.Helper \
+			            /Library/Preferences/app.hostess.Hostess.Helper.plist \
+			            /Library/Preferences/app.hostess.Hostess.ManagedHelper.plist
+		          SH
+		          sudo: true,
+		          must_succeed: true,
+	          }
+
+	zap trash: [
+		"~/Library/Application Support/Hostess",
+		"~/Library/Preferences/app.hostess.Hostess.plist",
+	]
+end
