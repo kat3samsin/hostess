@@ -2,6 +2,21 @@
 
 Hostess is a standalone macOS menu bar app for switching hosts-file profiles.
 
+## Install with Homebrew
+
+Install from this project's Homebrew tap:
+
+```bash
+brew tap kat3samsin/hostess https://github.com/kat3samsin/hostess.git
+brew install --cask kat3samsin/hostess/hostess
+```
+
+The tap installs the current Apple Silicon release for macOS 13 or later. It is ad hoc signed and not notarized. Open Hostess from Applications, then approve it in **System Settings → Privacy & Security → Open Anyway** if macOS blocks its first launch.
+
+This release requires administrator approval for profile changes. Installing through Homebrew does not enable passwordless switching. If replacing a signed build, choose **Disable Passwordless Switching** in that app first.
+
+To update, run `brew upgrade --cask kat3samsin/hostess/hostess`. An ordinary `brew uninstall --cask hostess` preserves profiles and the current hosts file.
+
 ## Download
 
 The current ZIP requires macOS 13 or later and an Apple Silicon Mac. It uses an ad hoc signature and is **not notarized**. Profile changes require administrator approval. Passwordless switching is unavailable in this download.
@@ -88,7 +103,7 @@ Scripts/package_app.sh
 
 The script builds with an ad hoc signature and creates the ZIP and its SHA-256 checksum in `.build/releases`. On Apple Silicon, the archive is `Hostess-0.2.0-arm64-unnotarized.zip`. Publish both files together and retain the installation instructions above.
 
-For a release that passes Gatekeeper's normal checks, use Developer ID signing and notarization through `Scripts/release_app.sh`. Signed-release instructions and the Homebrew cask template live in [Packaging/Homebrew](Packaging/Homebrew/README.md). That template still needs an actual release URL and SHA-256 before publication.
+The published [Homebrew cask](Casks/hostess.rb) pins the current release URL and SHA-256. For a release that passes Gatekeeper's normal checks, use Developer ID signing and notarization through `Scripts/release_app.sh`. See [Packaging/Homebrew](Packaging/Homebrew/README.md) for release and cask maintenance instructions.
 
 ## Behavior
 

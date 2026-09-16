@@ -24,7 +24,7 @@ Replacing the app does not remove the old service. Use **Remove Old Helper** in 
 
 ## Removal and updates
 
-Choose **Disable Passwordless Switching** before manually replacing or removing a signed app. This unregisters the managed service. The Homebrew template unregisters it before removal, then removes helper configuration and any remaining legacy installation. Ordinary uninstall preserves profiles; Homebrew's explicit zap operation removes user data.
+Choose **Disable Passwordless Switching** before manually replacing or removing a signed app. This unregisters the managed service. The Homebrew cask unregisters it before removal, then removes helper configuration and any remaining legacy installation. Ordinary uninstall preserves profiles; Homebrew's explicit zap operation removes user data.
 
 For non-Homebrew removal, the service can also be unregistered by running the installed app's executable with `--unregister-helper` as the current user. Do not run the app executable as root. The inactive enrollment file at `/Library/Preferences/app.hostess.Hostess.ManagedHelper.plist` can be removed separately with administrator privileges.
 
