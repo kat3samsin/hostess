@@ -13,6 +13,14 @@ This is a project tap. Official Homebrew casks must pass [Homebrew's Gatekeeper 
 
 ## Update the cask
 
+Build the archive that Homebrew installs:
+
+```bash
+Scripts/package_app.sh
+```
+
+The script creates an ad hoc signed ZIP and its SHA-256 file in `.build/releases`. On Apple Silicon, the archive is `Hostess-0.2.0-arm64-unnotarized.zip`. GitHub release assets host the archive used by the cask. Keep those assets available and direct users to the Homebrew installation instructions.
+
 1. Build and publish a versioned archive with its SHA-256 file.
 2. Update the version, URL, SHA-256, architecture, and macOS requirement in `Casks/hostess.rb`.
 3. Check the cask with `brew style Casks/hostess.rb`.

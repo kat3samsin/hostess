@@ -4,13 +4,13 @@ Hostess replaces `/etc/hosts` and therefore needs administrator authority. Profi
 
 ## Administrator approval
 
-The public unnotarized ZIP and local ad hoc builds use macOS administrator authorization for profile changes. The selected UTF-8 contents are encoded as data in the authorization request. The privileged operation creates its own staging directory under `/private/etc`, writes fixed permissions, and atomically replaces the hosts file. It does not read a temporary pathname supplied by the user process.
+The Homebrew release and local ad hoc builds use macOS administrator authorization for profile changes. The selected UTF-8 contents are encoded as data in the authorization request. The privileged operation creates its own staging directory under `/private/etc`, writes fixed permissions, and atomically replaces the hosts file. It does not read a temporary pathname supplied by the user process.
 
 Both write paths reject empty content, null bytes, and profiles larger than 512 KiB. This limit keeps administrator requests within the tested command transport size.
 
 ## Passwordless switching
 
-Passwordless switching requires an Apple Development signed personal build or a Developer ID signed build, with Hardened Runtime. The public ad hoc ZIP cannot enable this helper. The helper is registered through `SMAppService`, so macOS verifies the bundled executable and requires administrator approval in System Settings. Hostess never copies a user-writable executable into a privileged location itself.
+Passwordless switching requires an Apple Development signed personal build or a Developer ID signed build, with Hardened Runtime. The Homebrew release cannot enable this helper. The helper is registered through `SMAppService`, so macOS verifies the bundled executable and requires administrator approval in System Settings. Hostess never copies a user-writable executable into a privileged location itself.
 
 During setup, administrator authorization records the current user's numeric ID in a root-owned configuration file. The helper requires that ID for every write. Both sides of the XPC connection require the expected identifier, the same signing authority type, and the same trusted Apple team. Personal builds additionally require the exact same Apple Development certificate. Builds with debugging or code-injection entitlements and ad hoc signatures are rejected. Replacing an expired development certificate requires rebuilding both the app and helper.
 
@@ -30,12 +30,12 @@ For non-Homebrew removal, the service can also be unregistered by running the in
 
 ## Releases
 
-`Scripts/package_app.sh` creates the public unnotarized ZIP and a SHA-256 checksum. It uses an ad hoc signature, which provides no verified developer identity. The archive name includes the version, architecture, and `unnotarized` label. The current download supports Apple Silicon and macOS 13 or later.
+`Scripts/package_app.sh` creates the archive used by Homebrew and a SHA-256 checksum. It uses an ad hoc signature, which provides no verified developer identity. The archive name includes the version, architecture, and `unnotarized` label. The current Homebrew release supports Apple Silicon and macOS 13 or later. Its GitHub release assets remain available because the cask downloads and verifies that archive.
 
-macOS normally blocks this download on first launch. Users can approve it through **System Settings → Privacy & Security → Open Anyway**, where permitted. See [Apple's installation guidance](https://support.apple.com/en-us/102445) and the [download instructions](README.md#download).
+macOS normally blocks this app on first launch. Users can approve it through **System Settings → Privacy & Security → Open Anyway**, where permitted. See [Apple's installation guidance](https://support.apple.com/en-us/102445) and the [Homebrew installation instructions](README.md#install-with-homebrew).
 
 `Scripts/build_app.sh` produces a local ad hoc build by default and stops on signing errors. Public releases use `Scripts/package_app.sh` and the project's Homebrew tap.
 
-Passwordless switching has been verified on the maintainer's Mac with an Apple Development signed personal build. Installation and privileged writes from the downloaded ZIP on another Mac remain unverified. The automated tests verify rejected impostor signatures and safe command behavior using scratch files. They do not perform administrator writes.
+Passwordless switching has been verified on the maintainer's Mac with an Apple Development signed personal build. Homebrew installation, removal, and privileged writes on another Mac remain unverified. The automated tests verify rejected impostor signatures and safe command behavior using scratch files. They do not perform administrator writes.
 
 Keep real hosts profiles, private screenshots, credentials, and signing keys out of public issues and repository files. This project has no telemetry, network client, or external Swift package dependencies.
