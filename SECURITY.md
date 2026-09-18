@@ -48,6 +48,6 @@ macOS normally blocks this app on first launch. Users can approve it through **S
 
 `Scripts/build_app.sh` produces a local ad hoc build by default and stops on signing errors. Public releases use `Scripts/package_app.sh` and the project's Homebrew tap.
 
-Administrator installation, the running root helper, and enrollment for a rebuilt ad hoc app have been verified on the maintainer's Mac. Profile switching with this helper and a complete Homebrew installation, update, and removal check on a disposable Mac still need verification. Automated checks use scratch files and test code-signing requirements. They do not establish that privileged writes work on a fresh Mac.
+Administrator installation, the running root helper, and enrollment for a rebuilt ad hoc app have been verified on the maintainer's Mac. The maintainer has also confirmed passwordless profile switching with this build. A complete Homebrew installation, update, and removal check on a disposable Mac remains unverified. Automated checks use scratch files and test code-signing requirements. They do not establish that privileged writes work on a fresh Mac.
 
 Keep real hosts profiles, private screenshots, credentials, and signing keys out of public issues and repository files. This project has no telemetry, network client, or external Swift package dependencies.
