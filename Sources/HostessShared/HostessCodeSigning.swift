@@ -25,7 +25,7 @@ public enum HostessCodeSigning {
 	and certificate leaf[field.1.2.840.113635.100.6.1.12] exists
 	"""
 
-	private static let prohibitedEntitlements = [
+	static let prohibitedEntitlements = [
 		"com.apple.security.get-task-allow",
 		"com.apple.security.cs.disable-library-validation",
 		"com.apple.security.cs.allow-dyld-environment-variables",

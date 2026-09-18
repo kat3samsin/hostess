@@ -18,10 +18,20 @@ private enum HelperError: LocalizedError {
 }
 
 private final class HelperService: NSObject, HostessHelperProtocol {
+	private let authorization: HelperAuthorization
+
+	init(authorization: HelperAuthorization) {
+		self.authorization = authorization
+	}
+
+	func ping(withReply reply: @escaping (Bool) -> Void) {
+		reply(NSXPCConnection.current().map(authorization.allows) ?? false)
+	}
+
 	func writeHostsFile(_ content: String, withReply reply: @escaping (Bool, String?) -> Void) {
 		do {
 			guard let connection = NSXPCConnection.current(),
-				isAllowedClient(connection)
+				authorization.allows(connection)
 			else {
 				throw HelperError.unauthorizedClient
 			}
@@ -90,18 +100,21 @@ private final class HelperService: NSObject, HostessHelperProtocol {
 }
 
 private final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate {
-	private let service = HelperService()
+	private let service: HelperService
+	private let authorization: HelperAuthorization
 	private let clientRequirement: String
 
-	init(clientRequirement: String) {
+	init(clientRequirement: String, authorization: HelperAuthorization) {
 		self.clientRequirement = clientRequirement
+		self.authorization = authorization
+		self.service = HelperService(authorization: authorization)
 	}
 
 	func listener(
 		_ listener: NSXPCListener,
 		shouldAcceptNewConnection newConnection: NSXPCConnection
 	) -> Bool {
-		guard isAllowedClient(newConnection) else {
+		guard authorization.allows(newConnection) else {
 			return false
 		}
 
@@ -113,9 +126,22 @@ private final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate {
 	}
 }
 
-private func isAllowedClient(_ connection: NSXPCConnection) -> Bool {
-	let uid = connection.effectiveUserIdentifier
-	return uid != 0 && allowedUserIdentifier() == uid
+private enum HelperAuthorization {
+	case managed
+	case pinned(PinnedHelperEnrollment)
+
+	func allows(_ connection: NSXPCConnection) -> Bool {
+		let uid = connection.effectiveUserIdentifier
+		guard uid != 0 else { return false }
+		switch self {
+		case .managed:
+			return allowedUserIdentifier() == uid
+		case .pinned(let enrollment):
+			// Re-read before every request so removing or replacing enrollment also
+			// revokes connections that were already accepted by this process.
+			return enrollment.allowedUID == uid && (try? PinnedHelperEnrollment.read()) == enrollment
+		}
+	}
 }
 
 private func allowedUserIdentifier() -> uid_t? {
@@ -146,19 +172,36 @@ private func allowedUserIdentifier() -> uid_t? {
 @main
 enum HostessHelperMain {
 	static func main() {
-		guard geteuid() == 0,
-			let requirement = try? HostessCodeSigning.peerRequirement(
-				identifier: HostessPrivilegedHelper.appIdentifier
-			)
-		else {
-			FileHandle.standardError.write(Data("Hostess helper requires a trusted signed build and Service Management.\n".utf8))
+		do {
+			guard geteuid() == 0 else { throw HelperError.unauthorizedClient }
+			let arguments = Array(CommandLine.arguments.dropFirst())
+			let requirement: String
+			let label: String
+			let authorization: HelperAuthorization
+			if arguments == ["--pinned-helper"] {
+				let enrollment = try PinnedHelperEnrollment.read()
+				guard try PinnedHelperTrust.currentCodeHash(identifier: HostessPrivilegedHelper.label) == enrollment.helperCDHash
+				else { throw PinnedHelperError.invalidEnrollment }
+				requirement = try PinnedHelperTrust.requirement(
+					identifier: HostessPrivilegedHelper.appIdentifier, cdHash: enrollment.appCDHash
+				)
+				label = PinnedHelperInstallation.label
+				authorization = .pinned(enrollment)
+			} else {
+				guard arguments.isEmpty else { throw HelperError.unauthorizedClient }
+				requirement = try HostessCodeSigning.peerRequirement(identifier: HostessPrivilegedHelper.appIdentifier)
+				label = HostessPrivilegedHelper.label
+				authorization = .managed
+			}
+			let delegate = HelperListenerDelegate(clientRequirement: requirement, authorization: authorization)
+			let listener = NSXPCListener(machServiceName: label)
+			listener.setConnectionCodeSigningRequirement(requirement)
+			listener.delegate = delegate
+			listener.resume()
+			RunLoop.current.run()
+		} catch {
+			FileHandle.standardError.write(Data("Hostess helper refused to start: \(error.localizedDescription)\n".utf8))
 			exit(EXIT_FAILURE)
 		}
-		let delegate = HelperListenerDelegate(clientRequirement: requirement)
-		let listener = NSXPCListener(machServiceName: HostessPrivilegedHelper.label)
-		listener.setConnectionCodeSigningRequirement(requirement)
-		listener.delegate = delegate
-		listener.resume()
-		RunLoop.current.run()
 	}
 }

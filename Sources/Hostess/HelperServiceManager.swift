@@ -2,12 +2,67 @@ import AppKit
 import HostessShared
 import ServiceManagement
 
+struct HelperConnectionSettings {
+	let name: String
+	let requirement: String
+	let needsHandshake: Bool
+}
+
 @MainActor
 enum HelperServiceManager {
 	static let service = SMAppService.daemon(plistName: HostessPrivilegedHelper.plistFileName)
 
-	static var supportsPasswordlessSwitching: Bool {
+	static var usesManagedHelper: Bool {
 		(try? HostessCodeSigning.peerRequirement(identifier: HostessPrivilegedHelper.label)) != nil
+	}
+
+	static var supportsPasswordlessSwitching: Bool {
+		usesManagedHelper || (try? PinnedHelperTrust.currentIdentity()) != nil
+	}
+
+	static var requiresApproval: Bool {
+		usesManagedHelper && service.status == .requiresApproval
+	}
+
+	static var hasPinnedHelper: Bool {
+		FileManager.default.fileExists(atPath: PinnedHelperInstallation.configPath)
+			|| FileManager.default.fileExists(atPath: PinnedHelperInstallation.toolPath)
+			|| FileManager.default.fileExists(atPath: PinnedHelperInstallation.plistPath)
+	}
+
+	static var isEnabled: Bool {
+		if usesManagedHelper { return service.status == .enabled }
+		guard let identity = try? PinnedHelperTrust.currentIdentity(),
+			let enrollment = try? PinnedHelperEnrollment.read(),
+			enrollment.matches(identity, uid: getuid())
+		else { return false }
+		return isServiceLoaded(PinnedHelperInstallation.label)
+	}
+
+	static func connectionSettings() throws -> HelperConnectionSettings {
+		if usesManagedHelper {
+			return HelperConnectionSettings(name: HostessPrivilegedHelper.label,
+				requirement: try HostessCodeSigning.peerRequirement(identifier: HostessPrivilegedHelper.label), needsHandshake: false)
+		}
+		let identity = try PinnedHelperTrust.currentIdentity()
+		guard try PinnedHelperEnrollment.read().matches(identity, uid: getuid()) else {
+			throw PinnedHelperError.invalidEnrollment
+		}
+		return HelperConnectionSettings(name: PinnedHelperInstallation.label,
+			requirement: try identity.helperRequirement, needsHandshake: true)
+	}
+
+	private static func isServiceLoaded(_ label: String) -> Bool {
+		let process = Process()
+		process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+		process.arguments = ["print", "system/\(label)"]
+		process.standardOutput = FileHandle.nullDevice
+		process.standardError = FileHandle.nullDevice
+		do {
+			try process.run()
+			process.waitUntilExit()
+			return process.terminationStatus == 0
+		} catch { return false }
 	}
 
 	static var hasLegacyHelper: Bool {
@@ -33,6 +88,18 @@ enum HelperServiceManager {
 	}
 
 	static func register() throws {
+		if !usesManagedHelper {
+			let identity = try PinnedHelperTrust.currentIdentity()
+			let source = Bundle.main.bundleURL.appendingPathComponent(HostessPrivilegedHelper.bundledToolPath)
+			let command = try PinnedHelperInstallation.installCommand(
+				sourcePath: source.path, helperSHA256: identity.helperSHA256,
+				appCDHash: identity.appCDHash, helperCDHash: identity.helperCDHash, allowedUID: getuid()
+			)
+			try AdministratorTask.runShell(command)
+			guard isEnabled else { throw PinnedHelperError.invalidEnrollment }
+			try PrivilegedHelperClient().checkConnection(settings: connectionSettings())
+			return
+		}
 		_ = try HostessCodeSigning.peerRequirement(identifier: HostessPrivilegedHelper.label)
 		// Only fixed commands and this process's numeric UID cross the authorization boundary.
 		// The operating system installs and verifies the bundled executable separately.
@@ -58,6 +125,17 @@ enum HelperServiceManager {
 	}
 
 	static func unregister() throws {
+		if !usesManagedHelper {
+			if hasPinnedHelper || isServiceLoaded(PinnedHelperInstallation.label) {
+				try AdministratorTask.runShell(PinnedHelperInstallation.removalCommand)
+			}
+			return
+		}
+		try unregisterManagedHelper()
+	}
+
+	// Homebrew performs pinned-helper cleanup itself using fixed system commands.
+	static func unregisterManagedHelper() throws {
 		if service.status == .enabled || service.status == .requiresApproval {
 			try service.unregister()
 		}

@@ -17,6 +17,7 @@ private enum AppConstants {
 private enum SettingsKey {
 	static let selectedProfileFileName = "selectedProfileFileName"
 	static let showProfileSymbolInMenuBar = "showProfileSymbolInMenuBar"
+	static let passwordlessSetupPromptBuild = "passwordlessSetupPromptBuild"
 }
 
 private func defaultHostsProfileContent() -> String {
@@ -65,16 +66,22 @@ private enum PrivilegedHelperClientError: LocalizedError {
 	}
 }
 
-private final class PrivilegedHelperClient {
-	func writeHostsFile(_ content: String) throws {
+final class PrivilegedHelperClient {
+	func writeHostsFile(_ content: String, settings: HelperConnectionSettings) throws {
+		try request(content: content, settings: settings)
+	}
+
+	func checkConnection(settings: HelperConnectionSettings) throws {
+		try request(content: nil, settings: settings)
+	}
+
+	private func request(content: String?, settings: HelperConnectionSettings) throws {
 		let connection = NSXPCConnection(
-			machServiceName: HostessPrivilegedHelper.label,
+			machServiceName: settings.name,
 			options: .privileged
 		)
 		connection.remoteObjectInterface = NSXPCInterface(with: HostessHelperProtocol.self)
-		connection.setCodeSigningRequirement(try HostessCodeSigning.peerRequirement(
-			identifier: HostessPrivilegedHelper.label
-		))
+		connection.setCodeSigningRequirement(settings.requirement)
 
 		let semaphore = DispatchSemaphore(value: 0)
 		let resultLock = NSLock()
@@ -107,14 +114,29 @@ private final class PrivilegedHelperClient {
 			)
 		}
 
-		proxy.writeHostsFile(content) { success, message in
-			if success {
+		func sendContents() {
+			guard let content else {
 				setResult(.success(()))
-			} else {
-				setResult(.failure(PrivilegedHelperClientError.operationFailed(
-					message ?? "The privileged helper could not update /etc/hosts."
-				)))
+				return
 			}
+			proxy.writeHostsFile(content) { success, message in
+				if success {
+					setResult(.success(()))
+				} else {
+					setResult(.failure(PrivilegedHelperClientError.operationFailed(
+						message ?? "The privileged helper could not update /etc/hosts."
+					)))
+				}
+			}
+		}
+		if settings.needsHandshake || content == nil {
+			// Authenticate a harmless reply on this connection before sending hosts data.
+			proxy.ping { accepted in
+				if accepted { sendContents() }
+				else { setResult(.failure(PinnedHelperError.invalidEnrollment)) }
+			}
+		} else {
+			sendContents()
 		}
 
 		if semaphore.wait(timeout: .now() + 5) == .timedOut {
@@ -170,6 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 		rebuildMenu()
 		promptToRemoveLegacyHelperIfNeeded()
+		promptToEnablePasswordlessSwitchingIfNeeded()
 	}
 
 	@objc private func applyProfileFromMenu(_ sender: NSMenuItem) {
@@ -267,17 +290,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 	@objc private func installPrivilegedHelperFromMenu() {
 		do {
-			if HelperServiceManager.service.status != .requiresApproval {
+			if !HelperServiceManager.requiresApproval {
 				try HelperServiceManager.register()
 			}
-			if HelperServiceManager.service.status == .requiresApproval {
+			if HelperServiceManager.requiresApproval {
 				showMessage(
 					message: "Approve passwordless switching",
 					details: "Enable Hostess in System Settings → Login Items to finish setup. Profile changes will use administrator approval until then."
 				)
 				SMAppService.openSystemSettingsLoginItems()
-			} else if HelperServiceManager.service.status == .enabled {
-				showMessage(message: "Passwordless switching enabled", details: "Hostess can now apply profiles using its signed helper.")
+			} else if HelperServiceManager.isEnabled {
+				showMessage(message: "Passwordless switching enabled", details: "Hostess can now switch profiles without another password prompt.")
 			}
 			rebuildMenu()
 		} catch {
@@ -317,6 +340,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		NSApp.activate(ignoringOtherApps: true)
 		if alert.runModal() == .alertFirstButtonReturn {
 			removeLegacyHelperFromMenu()
+		}
+	}
+
+	private func promptToEnablePasswordlessSwitchingIfNeeded() {
+		guard HelperServiceManager.supportsPasswordlessSwitching, !HelperServiceManager.isEnabled else { return }
+		let build = (try? PinnedHelperTrust.currentIdentity().appCDHash)
+			?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "")
+		guard UserDefaults.standard.string(forKey: SettingsKey.passwordlessSetupPromptBuild) != build else { return }
+		UserDefaults.standard.set(build, forKey: SettingsKey.passwordlessSetupPromptBuild)
+		let alert = NSAlert()
+		alert.messageText = "Set up passwordless switching"
+		alert.informativeText = "Approve Hostess's helper once, then switch profiles without another password prompt. You can disable it from the menu."
+		if !HelperServiceManager.usesManagedHelper {
+			alert.informativeText += " After an app update, approve setup again for the new version."
+		}
+		alert.addButton(withTitle: "Enable Passwordless Switching")
+		alert.addButton(withTitle: "Not Now")
+		NSApp.activate(ignoringOtherApps: true)
+		if alert.runModal() == .alertFirstButtonReturn {
+			installPrivilegedHelperFromMenu()
 		}
 	}
 
@@ -406,16 +449,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		menu.addItem(showSymbolItem)
 		menu.addItem(actionItem("Open /etc/hosts", #selector(openHostsFile)))
 		if HelperServiceManager.supportsPasswordlessSwitching {
-			if HelperServiceManager.service.status == .requiresApproval {
+			let enabled = HelperServiceManager.isEnabled
+			let requiresApproval = HelperServiceManager.requiresApproval
+			let needsUpdate = !HelperServiceManager.usesManagedHelper && HelperServiceManager.hasPinnedHelper && !enabled
+			if requiresApproval {
 				menu.addItem(actionItem("Approve Passwordless Switching...", #selector(installPrivilegedHelperFromMenu)))
 			}
-			if HelperServiceManager.service.status == .enabled || HelperServiceManager.service.status == .requiresApproval {
+			if needsUpdate {
+				menu.addItem(actionItem("Update Passwordless Switching...", #selector(installPrivilegedHelperFromMenu)))
+			}
+			if enabled || requiresApproval || needsUpdate {
 				menu.addItem(actionItem("Disable Passwordless Switching", #selector(disablePrivilegedHelperFromMenu)))
 			} else {
 				menu.addItem(actionItem("Enable Passwordless Switching...", #selector(installPrivilegedHelperFromMenu)))
 			}
 		} else {
-			menu.addItem(disabledItem("Passwordless switching requires an Apple signing certificate"))
+			menu.addItem(disabledItem("Passwordless setup requires a verified Hostess app"))
 		}
 		if HelperServiceManager.hasLegacyHelper {
 			menu.addItem(actionItem("Remove Old Helper...", #selector(removeLegacyHelperFromMenu)))
@@ -694,8 +743,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 			return
 		}
 
-		if HelperServiceManager.supportsPasswordlessSwitching && HelperServiceManager.service.status == .enabled {
-			try PrivilegedHelperClient().writeHostsFile(normalizedContent)
+		if HelperServiceManager.isEnabled {
+			try PrivilegedHelperClient().writeHostsFile(normalizedContent, settings: HelperServiceManager.connectionSettings())
 		} else {
 			_ = try AdministratorTask.run(AdministratorHostsCommand.script(for: normalizedContent))
 		}
@@ -1321,7 +1370,7 @@ enum HostessMain {
 	static func main() {
 		if CommandLine.arguments.dropFirst() == ["--unregister-helper"] {
 			do {
-				try HelperServiceManager.unregister()
+				try HelperServiceManager.unregisterManagedHelper()
 				exit(0)
 			} catch {
 				FileHandle.standardError.write(Data((error.localizedDescription + "\n").utf8))

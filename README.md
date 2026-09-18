@@ -13,7 +13,9 @@ brew install --cask kat3samsin/hostess/hostess
 
 The tap installs the current Apple Silicon release for macOS 13 or later. It is ad hoc signed and not notarized. Open Hostess from Applications, then approve it in **System Settings → Privacy & Security → Open Anyway** if macOS blocks its first launch.
 
-This release requires administrator approval for profile changes. Installing through Homebrew does not enable passwordless switching. If replacing a signed build, choose **Disable Passwordless Switching** in that app first.
+On first launch, choose **Enable Passwordless Switching** to set it up. Approve setup once with an administrator password, then switch profiles without another password prompt. Choose **Not Now** to keep administrator approval for each profile change. You can enable or disable passwordless switching from the menu later.
+
+Each app update needs one new setup approval because the helper only accepts the exact Hostess build you approved. If replacing a personal signed build, choose **Disable Passwordless Switching** in that app first.
 
 To update, run `brew upgrade --cask kat3samsin/hostess/hostess`. An ordinary `brew uninstall --cask hostess` preserves profiles and the current hosts file.
 
@@ -54,7 +56,8 @@ Maintainers can find packaging and cask update instructions in [Packaging/Homebr
 - Supports standard macOS editing shortcuts: Command-C/V/X/A for copy, paste, cut, and select all; Command-Z and Shift-Command-Z for undo and redo.
 - Applies the selected profile by replacing `/etc/hosts` with that profile's content.
 - Accepts profiles up to 512 KiB when applying changes; rejects empty content and null bytes.
-- Uses administrator approval to write the selected contents through protected staging, then flushes DNS cache.
+- Offers passwordless switching after one administrator approval during setup, with a new approval after each app update.
+- Writes through protected staging and flushes the DNS cache. If passwordless switching is off, each profile change requires administrator approval.
 
 ## Security and sharing
 

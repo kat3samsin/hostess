@@ -16,5 +16,6 @@ public enum HostessPrivilegedHelper {
 
 @objc(HostessHelperProtocol)
 public protocol HostessHelperProtocol: NSObjectProtocol {
+	func ping(withReply reply: @escaping (Bool) -> Void)
 	func writeHostsFile(_ content: String, withReply reply: @escaping (Bool, String?) -> Void)
 }

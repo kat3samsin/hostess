@@ -33,6 +33,15 @@ fi
 
 HELPER_PATH="$APP_DIR/Contents/Library/LaunchServices/$HELPER_LABEL"
 /usr/bin/codesign "${SIGNING_OPTIONS[@]}" --identifier "$HELPER_LABEL" "$HELPER_PATH"
+HELPER_CDHASH="$(/usr/bin/codesign --display --verbose=4 "$HELPER_PATH" 2>&1 | /usr/bin/sed -n 's/^CDHash=//p')"
+HELPER_SHA256="$(/usr/bin/shasum -a 256 "$HELPER_PATH" | /usr/bin/cut -d ' ' -f 1)"
+if [[ ! "$HELPER_CDHASH" =~ ^[0-9a-f]{40}$ || ! "$HELPER_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+	echo "Could not determine the bundled helper identity." >&2
+	exit 1
+fi
+# Seal the exact helper bytes into the app before signing the outer bundle.
+/usr/libexec/PlistBuddy -c "Add :HostessHelperCDHash string $HELPER_CDHASH" "$APP_DIR/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :HostessHelperSHA256 string $HELPER_SHA256" "$APP_DIR/Contents/Info.plist"
 /usr/bin/codesign "${SIGNING_OPTIONS[@]}" "$APP_DIR"
 /usr/bin/codesign --verify --strict "$HELPER_PATH"
 /usr/bin/codesign --verify --deep --strict "$APP_DIR"
@@ -56,7 +65,7 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
 		fi
 	done
 else
-	echo "Local ad hoc build. The passwordless helper requires an Apple Development or Developer ID signed build." >&2
+	echo "Ad hoc build. Passwordless switching requires one administrator setup for each app build." >&2
 fi
 
 echo "$APP_DIR"

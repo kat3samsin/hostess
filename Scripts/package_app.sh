@@ -28,7 +28,7 @@ if [[ -e "$RELEASE_ZIP" || -e "$RELEASE_ZIP.sha256" ]]; then
 	exit 1
 fi
 
-# Downloads use ad hoc signing and administrator approval for profile changes.
+# Homebrew downloads use ad hoc signing and one helper setup approval per build.
 # Never package a personal development certificate by inheriting the environment.
 HOSTESS_SIGNING_IDENTITY=- "$ROOT_DIR/Scripts/build_app.sh"
 
